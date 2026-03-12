@@ -1,0 +1,76 @@
+---
+title: Sequence Diagram — Article Creation (Full Event-Driven Flow)
+---
+sequenceDiagram
+    actor Author as 👤 Author
+    participant React as React SPA
+    participant GW as API Gateway
+    participant KC as Keycloak
+    participant AS as Article Service
+    participant PG as PostgreSQL
+    participant REDIS as Redis Cache
+    participant KAFKA as Kafka
+    participant AIS as AI/LLM Service
+    participant SS as Search Service
+    participant ANS as Analytics Service
+    participant NS as Notification Service
+
+    Note over Author,NS: Phase 1: Authentication + Article Creation
+
+    Author->>React: Write article in rich editor
+    React->>KC: Check JWT token validity
+    KC-->>React: Token valid (role: EDITOR)
+    React->>GW: POST /api/v1/articles<br/>Authorization: Bearer {JWT}<br/>{title, content, categoryId, tags[]}
+
+    GW->>KC: Validate JWT signature + expiry
+    KC-->>GW: Token valid, claims: {sub, role: EDITOR}
+    GW->>GW: Circuit Breaker check (Resilience4j)
+    GW->>AS: Forward with user context
+
+    Note over AS,PG: Phase 2: DDD Domain Processing
+
+    AS->>AS: Validate CreateArticleRequest
+    AS->>AS: Article.create(title, content, author, category)<br/>Aggregate Root factory method
+    AS->>AS: Article.addTags(tags)<br/>Business rule: max 10 tags
+    AS->>AS: Domain Events registered:<br/>1. ArticleCreatedEvent<br/>2. ArticleTaggedEvent
+    AS->>PG: INSERT INTO articles<br/>(content stored as TEXT,<br/>metadata as JSONB)
+    PG-->>AS: Article saved (UUID)
+
+    AS->>REDIS: INVALIDATE cache key:<br/>articles:list:*
+    AS->>KAFKA: Publish ArticleCreatedEvent<br/>Topic: article-events<br/>{articleId, title, authorId, tags, content}
+
+    AS-->>GW: 201 Created + ArticleResponse
+    GW-->>React: ArticleResponse
+    React-->>Author: ✅ Article published!
+
+    Note over KAFKA,NS: Phase 3: Async Event Processing (5 parallel consumers)
+
+    par AI Auto-Summarization
+        KAFKA->>AIS: Consume ArticleCreatedEvent
+        AIS->>AIS: Chunk content for LLM
+        AIS->>AIS: Call Claude/OpenAI API<br/>Prompt: "Summarize this article..."
+        AIS->>AIS: Generate vector embedding<br/>(for semantic search)
+        AIS->>PG: UPDATE articles<br/>SET summary = {ai_summary}<br/>SET embedding = {vector}
+        AIS->>KAFKA: Publish ArticleSummarizedEvent
+    and Search Index Update
+        KAFKA->>SS: Consume ArticleCreatedEvent
+        SS->>SS: Build search document<br/>{title, content, tags, author}
+        SS->>SS: Add to Knowledge Graph<br/>BFS: find related articles by tags
+        SS->>SS: Index in Elasticsearch<br/>Custom analyzer for relevance
+    and Analytics Update
+        KAFKA->>ANS: Consume ArticleCreatedEvent
+        ANS->>ANS: Update author stats<br/>(article count, streaks)
+        ANS->>ANS: PriorityQueue.add(article)<br/>for trending calculation
+        ANS->>PG: INSERT INTO article_stats
+    and Auto-Tagging
+        KAFKA->>AIS: (Same event, different consumer group)
+        AIS->>AIS: LLM auto-suggest tags<br/>Compare with existing tags
+        AIS->>KAFKA: Publish TagSuggestionsEvent
+    and Notify Followers
+        KAFKA->>NS: Consume ArticleCreatedEvent
+        NS->>PG: SELECT followers of author
+        NS->>NS: CompletableFuture.allOf()<br/>Send notifications in parallel<br/>(Virtual Threads - Java 21)
+        NS->>NS: In-app notification + Email
+    end
+
+    Note over Author,NS: ✅ Article is now searchable, summarized, indexed, and followers notified

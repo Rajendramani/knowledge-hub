@@ -1,0 +1,45 @@
+---
+title: Knowledge-Hub — DSA Algorithms Mapped to Real Use Cases
+---
+graph TB
+    subgraph TREE_DSA["🌳 Tree Data Structures"]
+        NARY["<b>N-ary Tree</b><br/>━━━━━━━━━━<br/>Use: Category Hierarchy<br/>━━━━━━━━━━<br/>Root: Technology<br/>├── Backend<br/>│   ├── Java<br/>│   ├── Spring Boot<br/>│   └── Node.js<br/>├── Frontend<br/>│   ├── React<br/>│   └── Vue<br/>└── DevOps<br/>    ├── Docker<br/>    └── Kubernetes<br/>━━━━━━━━━━<br/>Operations:<br/>• addChild() - O(1)<br/>• getBreadcrumb() - O(d)<br/>• getSubtree() - O(n)<br/>• findDepth() - O(d)"]
+
+        TRIE["<b>Trie (Prefix Tree)</b><br/>━━━━━━━━━━<br/>Use: Search Autocomplete<br/>━━━━━━━━━━<br/>Input: 'Jav'<br/>Results:<br/>→ Java (245 articles)<br/>→ JavaScript (189)<br/>→ Java 21 (156)<br/>━━━━━━━━━━<br/>Time: O(k) k=prefix len<br/>Space: O(ALPHABET * n)"]
+    end
+
+    subgraph GRAPH_DSA["📊 Graph Algorithms"]
+        BFS["<b>BFS (Breadth-First Search)</b><br/>━━━━━━━━━━<br/>Use: Related Articles<br/>━━━━━━━━━━<br/>Article A (Java Threads)<br/>Level 1: B(Concurrency), C(ExecutorService)<br/>Level 2: D(Virtual Threads), E(ForkJoin)<br/>━━━━━━━━━━<br/>Find articles within N hops<br/>Time: O(V + E)<br/>Space: O(V)"]
+
+        DFS["<b>DFS (Depth-First Search)</b><br/>━━━━━━━━━━<br/>Use: Learning Path<br/>━━━━━━━━━━<br/>Deep exploration:<br/>Java Basics → OOP → Collections<br/>→ Streams → Concurrency → Virtual Threads<br/>━━━━━━━━━━<br/>Explore one topic deeply<br/>Time: O(V + E)"]
+
+        DIJKSTRA["<b>Dijkstra's Algorithm</b><br/>━━━━━━━━━━<br/>Use: Shortest Learning Path<br/>━━━━━━━━━━<br/>From: 'Java Beginner'<br/>To: 'Microservices Expert'<br/>Shortest path considering<br/>difficulty weights<br/>━━━━━━━━━━<br/>Time: O((V+E) log V)"]
+    end
+
+    subgraph SORT_DSA["📈 Sorting Algorithms"]
+        MERGE["<b>MergeSort (Stable)</b><br/>━━━━━━━━━━<br/>Use: Trending Articles<br/>━━━━━━━━━━<br/>Sort by: views + recency + quality<br/>Stable sort preserves relative<br/>order of equal elements<br/>━━━━━━━━━━<br/>Time: O(n log n) always<br/>Space: O(n) extra"]
+
+        QUICK["<b>QuickSort (In-place)</b><br/>━━━━━━━━━━<br/>Use: User Leaderboard<br/>━━━━━━━━━━<br/>Rank users by:<br/>article count + quality<br/>Randomized pivot avoids<br/>worst case O(n²)<br/>━━━━━━━━━━<br/>Time: O(n log n) avg<br/>Space: O(log n)"]
+
+        HEAP["<b>PriorityQueue (Min-Heap)</b><br/>━━━━━━━━━━<br/>Use: Top-K Trending<br/>━━━━━━━━━━<br/>Maintain top 10 articles<br/>from stream of 100K+<br/>Min-heap of size K<br/>━━━━━━━━━━<br/>Time: O(n log k)<br/>Space: O(k)"]
+    end
+
+    subgraph SERVICES_MAP["⚙️ Service Mapping"]
+        CAT_SVC["Category Service<br/>Port: 8083"]
+        SEARCH_SVC["Search Service<br/>Port: 8089"]
+        ANALYTICS_SVC["Analytics Service<br/>Port: 8086"]
+    end
+
+    NARY --> CAT_SVC
+    TRIE --> SEARCH_SVC
+    BFS --> SEARCH_SVC
+    DFS --> SEARCH_SVC
+    DIJKSTRA --> SEARCH_SVC
+    MERGE --> ANALYTICS_SVC
+    QUICK --> ANALYTICS_SVC
+    HEAP --> ANALYTICS_SVC
+
+    style TREE_DSA fill:#E8F5E9,stroke:#2E7D32
+    style GRAPH_DSA fill:#E3F2FD,stroke:#1565C0
+    style SORT_DSA fill:#FFF8E1,stroke:#F9A825
+    style SERVICES_MAP fill:#F3E5F5,stroke:#7B1FA2

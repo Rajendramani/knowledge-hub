@@ -1,0 +1,102 @@
+---
+title: Knowledge-Hub — Database Schema (Entity Relationship Diagram)
+---
+erDiagram
+    USERS {
+        uuid id PK "gen_random_uuid()"
+        varchar email UK "NOT NULL, UNIQUE"
+        varchar first_name "NOT NULL"
+        varchar last_name "NOT NULL"
+        varchar password_hash "NOT NULL"
+        varchar role "ADMIN|EDITOR|VIEWER"
+        varchar status "ACTIVE|INACTIVE|SUSPENDED"
+        text bio "nullable"
+        varchar avatar_url "nullable"
+        jsonb metadata "default '{}'"
+        timestamp last_login_at "nullable"
+        timestamp created_at "NOT NULL"
+        timestamp updated_at "NOT NULL"
+        bigint version "Optimistic locking"
+    }
+
+    ARTICLES {
+        uuid id PK "gen_random_uuid()"
+        varchar title "NOT NULL, max 500"
+        text content "NOT NULL, rich text"
+        text summary "AI-generated summary"
+        varchar slug UK "URL-friendly title"
+        uuid author_id FK "references users.id"
+        uuid category_id FK "references categories.id"
+        varchar status "DRAFT|PUBLISHED|ARCHIVED"
+        jsonb metadata "views, reading_time"
+        vector embedding "pgvector - 1536 dims"
+        integer version_number "Content version"
+        timestamp published_at "nullable"
+        timestamp created_at "NOT NULL"
+        timestamp updated_at "NOT NULL"
+        bigint version "Optimistic locking"
+    }
+
+    ARTICLE_VERSIONS {
+        uuid id PK
+        uuid article_id FK "references articles.id"
+        text content "Snapshot of content"
+        integer version_number "1, 2, 3..."
+        uuid edited_by FK "references users.id"
+        varchar change_summary "What changed"
+        timestamp created_at "NOT NULL"
+    }
+
+    ARTICLE_TAGS {
+        uuid id PK
+        uuid article_id FK "references articles.id"
+        varchar tag_name "NOT NULL, lowercase"
+        timestamp created_at "NOT NULL"
+    }
+
+    CATEGORIES {
+        uuid id PK
+        varchar name "NOT NULL"
+        varchar slug UK "URL-friendly"
+        uuid parent_id FK "Self-referencing (N-ary tree)"
+        text description "nullable"
+        integer sort_order "Display ordering"
+        integer depth "Tree depth level"
+        varchar path "materialized path: /root/parent/child"
+        timestamp created_at "NOT NULL"
+        timestamp updated_at "NOT NULL"
+    }
+
+    ARTICLE_STATS {
+        uuid id PK
+        uuid article_id FK "references articles.id"
+        bigint view_count "default 0"
+        bigint unique_views "default 0"
+        bigint comment_count "default 0"
+        float trend_score "Calculated score"
+        float quality_score "AI + user ratings"
+        date stat_date "Daily aggregation"
+        timestamp updated_at "NOT NULL"
+    }
+
+    NOTIFICATIONS {
+        uuid id PK
+        uuid user_id FK "references users.id"
+        varchar type "COMMENT|REVIEW|SYSTEM"
+        varchar channel "EMAIL|IN_APP|BOTH"
+        varchar title "Notification title"
+        text message "Notification body"
+        jsonb payload "Additional data"
+        boolean is_read "default false"
+        timestamp read_at "nullable"
+        timestamp created_at "NOT NULL"
+    }
+
+    USERS ||--o{ ARTICLES : "authors"
+    USERS ||--o{ ARTICLE_VERSIONS : "edits"
+    USERS ||--o{ NOTIFICATIONS : "receives"
+    ARTICLES ||--o{ ARTICLE_VERSIONS : "has versions"
+    ARTICLES ||--o{ ARTICLE_TAGS : "has tags"
+    ARTICLES ||--o{ ARTICLE_STATS : "has stats"
+    CATEGORIES ||--o{ ARTICLES : "contains"
+    CATEGORIES ||--o{ CATEGORIES : "parent-child (tree)"

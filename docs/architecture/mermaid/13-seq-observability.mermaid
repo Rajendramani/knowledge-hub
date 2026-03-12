@@ -1,0 +1,59 @@
+---
+title: Sequence Diagram — Observability Flow (Trace → Metrics → Logs)
+---
+sequenceDiagram
+    actor User as 👤 User
+    participant GW as API Gateway<br/>(TraceId generated)
+    participant US as User Service<br/>(SpanId: US-001)
+    participant PG as PostgreSQL
+    participant KAFKA as Kafka
+    participant NS as Notification Svc<br/>(SpanId: NS-001)
+    participant ZIPKIN as Zipkin<br/>(Tracing)
+    participant PROM as Prometheus<br/>(Metrics)
+    participant GRAFANA as Grafana<br/>(Dashboard)
+    participant FB as Filebeat<br/>(Log Collector)
+    participant ELK as ELK Stack<br/>(Kibana)
+
+    Note over User,ELK: 📍 Request Journey: Every hop is traced, metered, and logged
+
+    User->>GW: POST /api/v1/users
+    GW->>GW: Generate TraceId: abc-123<br/>Generate SpanId: GW-001<br/>Start timer
+
+    Note right of GW: Headers added:<br/>X-B3-TraceId: abc-123<br/>X-B3-SpanId: GW-001<br/>X-B3-Sampled: 1
+
+    GW->>US: Forward + trace headers
+    US->>US: New SpanId: US-001<br/>ParentSpan: GW-001<br/>Log: "Creating user" + TraceId
+
+    US->>PG: SQL Query (traced)
+    PG-->>US: Result (45ms)
+    US->>US: Log: "User saved" + TraceId
+    US->>KAFKA: Publish event (traced)
+    US-->>GW: Response (120ms total)
+
+    KAFKA->>NS: Consume event
+    NS->>NS: New SpanId: NS-001<br/>Same TraceId: abc-123<br/>Log: "Sending notification"
+    NS->>NS: Send email (350ms)
+
+    Note over ZIPKIN,ELK: 📊 Telemetry Collection (Async, Non-blocking)
+
+    par Distributed Tracing
+        GW->>ZIPKIN: Report Span GW-001<br/>{traceId: abc-123, duration: 125ms}
+        US->>ZIPKIN: Report Span US-001<br/>{traceId: abc-123, duration: 120ms,<br/>parent: GW-001}
+        NS->>ZIPKIN: Report Span NS-001<br/>{traceId: abc-123, duration: 350ms}
+        Note right of ZIPKIN: Zipkin assembles trace:<br/>GW(125ms)<br/>└── US(120ms)<br/>    ├── PG(45ms)<br/>    └── Kafka(5ms)<br/>        └── NS(350ms)
+    and Metrics Collection
+        PROM->>GW: Scrape /actuator/prometheus
+        Note right of PROM: Metrics collected:<br/>http_requests_total{method=POST, status=201}<br/>http_request_duration_seconds{quantile=0.95}<br/>jvm_memory_used_bytes<br/>hikaricp_active_connections<br/>kafka_consumer_lag
+        PROM->>US: Scrape /actuator/prometheus
+        PROM->>GRAFANA: Query: rate(http_requests_total[5m])
+        Note right of GRAFANA: Dashboard panels:<br/>• Request Rate (RPM)<br/>• Error Rate (%)<br/>• P95 Latency<br/>• JVM Heap Usage<br/>• DB Connection Pool<br/>• Kafka Consumer Lag
+    and Log Aggregation
+        FB->>GW: Collect stdout logs
+        FB->>US: Collect stdout logs
+        FB->>NS: Collect stdout logs
+        Note right of FB: Log format (JSON structured):<br/>{"timestamp": "...",<br/> "traceId": "abc-123",<br/> "service": "user-service",<br/> "level": "INFO",<br/> "message": "User created",<br/> "userId": "uuid-456"}
+        FB->>ELK: Ship logs → Logstash → ES → Kibana
+        Note right of ELK: Kibana: Search by traceId<br/>to see ALL logs from<br/>ALL services for one request
+    end
+
+    GW-->>User: 201 Created

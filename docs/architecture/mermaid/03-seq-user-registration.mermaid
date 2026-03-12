@@ -1,0 +1,55 @@
+---
+title: Sequence Diagram — User Registration Flow
+---
+sequenceDiagram
+    actor User as 👤 User (Browser)
+    participant React as React SPA
+    participant GW as API Gateway
+    participant KC as Keycloak
+    participant US as User Service
+    participant PG as PostgreSQL
+    participant KAFKA as Kafka
+    participant NS as Notification Service
+    participant ES as Elasticsearch
+
+    Note over User,ES: Step 1: User fills registration form in React SPA
+
+    User->>React: Fill form (email, name, password)
+    React->>React: Client-side validation
+    React->>GW: POST /api/v1/users<br/>{email, firstName, lastName, password}
+
+    Note over GW,KC: Step 2: API Gateway validates JWT (for admin-created users) or allows public registration
+
+    GW->>GW: Rate limit check (Redis sliding window)
+    GW->>US: Forward request to User Service
+
+    Note over US,PG: Step 3: User Service processes registration with DDD
+
+    US->>US: Validate CreateUserRequest<br/>(Jakarta Bean Validation)
+    US->>US: Create Email Value Object<br/>(self-validates format)
+    US->>PG: SELECT EXISTS(email)<br/>Check duplicate email
+    PG-->>US: false (not duplicate)
+    US->>US: BCrypt.encode(password)<br/>(12 rounds)
+    US->>US: User.create(email, name, hash, role)<br/>Factory method → Aggregate Root
+    US->>US: Domain Event: UserCreatedEvent registered
+    US->>PG: INSERT INTO users (...)<br/>Flyway-managed schema
+    PG-->>US: User saved with UUID
+
+    Note over US,ES: Step 4: Publish Domain Events via Kafka
+
+    US->>KAFKA: Publish UserCreatedEvent<br/>Topic: user-events
+    US-->>GW: 201 Created<br/>{id, email, name, role, status}
+    GW-->>React: 201 Created + UserResponse
+    React-->>User: Show success message<br/>Redirect to dashboard
+
+    Note over KAFKA,ES: Step 5: Async Event Consumers process the event
+
+    KAFKA->>NS: Consume UserCreatedEvent
+    NS->>NS: ExecutorService.submit()<br/>(Multi-threaded processing)
+    NS->>NS: Compose welcome email
+    NS-->>User: 📧 Send welcome email
+
+    KAFKA->>ES: Consume UserCreatedEvent
+    ES->>ES: Index user for search<br/>{name, email, role}
+
+    Note over User,ES: ✅ Registration Complete — User can now login via Keycloak

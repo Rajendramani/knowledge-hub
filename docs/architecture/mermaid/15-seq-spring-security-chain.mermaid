@@ -1,0 +1,54 @@
+---
+title: Sequence Diagram — Spring Security Filter Chain (JWT Validation)
+---
+sequenceDiagram
+    actor Client as 👤 Client (Browser/Postman)
+    participant CORS as CorsFilter
+    participant CSRF as CsrfFilter<br/>(Disabled)
+    participant JWT as JwtAuthenticationFilter<br/>(OAuth2ResourceServer)
+    participant JWKS as Keycloak JWKS<br/>(Public Keys Cache)
+    participant CONV as KeycloakRoleConverter
+    participant AUTH as AuthorizationFilter<br/>(@PreAuthorize)
+    participant CTRL as UserController
+    participant EXC as ExceptionTranslationFilter
+
+    Note over Client,EXC: Request: PUT /api/v1/users/{id}<br/>Authorization: Bearer eyJhbGciOiJSUzI1NiI...
+
+    Client->>CORS: Request with Origin header
+    CORS->>CORS: Check allowed origins<br/>http://localhost:3000 ✅
+    CORS->>CSRF: Pass through
+
+    CSRF->>CSRF: Disabled (stateless JWT)<br/>Skip CSRF check
+    CSRF->>JWT: Pass through
+
+    JWT->>JWT: Extract token from<br/>Authorization: Bearer header
+    JWT->>JWT: Decode JWT header<br/>→ kid: "key-abc", alg: "RS256"
+
+    JWT->>JWKS: Get public key for kid: "key-abc"
+    Note right of JWKS: First request: fetch from<br/>http://keycloak:8180/.../certs<br/>Subsequent: use cached key
+    JWKS-->>JWT: RSA Public Key
+
+    JWT->>JWT: Verify signature ✅<br/>Check expiry (exp) ✅<br/>Check issuer (iss) ✅
+
+    JWT->>CONV: Convert JWT claims to authorities
+    CONV->>CONV: Extract realm_access.roles<br/>→ ["EDITOR"]
+    CONV->>CONV: Add ROLE_ prefix<br/>→ [ROLE_EDITOR]
+    CONV-->>JWT: GrantedAuthorities
+
+    JWT->>JWT: Create JwtAuthenticationToken<br/>{principal: JWT, authorities: [ROLE_EDITOR]}
+    JWT->>JWT: Set SecurityContext
+
+    JWT->>AUTH: Authenticated request
+    AUTH->>AUTH: Evaluate @PreAuthorize<br/>"hasRole('ADMIN') or #id == @securityUtils.currentUserId"
+    
+    alt User is updating OWN profile
+        AUTH->>AUTH: #id == currentUserId → TRUE ✅
+        AUTH->>CTRL: Allow access
+        CTRL-->>Client: 200 OK + Updated User
+    else User is NOT admin AND NOT own profile
+        AUTH->>EXC: Access Denied
+        EXC-->>Client: 403 Forbidden<br/>{"error": "Access Denied"}
+    end
+
+    Note over Client,EXC: If NO token provided:
+    Note over JWT,EXC: JWT filter → No Bearer token found → 401 Unauthorized

@@ -1,0 +1,79 @@
+---
+title: Sequence Diagram — Search Flow (Elasticsearch + Graph DSA + AI Semantic Search)
+---
+sequenceDiagram
+    actor User as 👤 User
+    participant React as React SPA
+    participant GW as API Gateway
+    participant SS as Search Service
+    participant ES as Elasticsearch
+    participant REDIS as Redis Cache
+    participant AIS as AI/LLM Service
+    participant GRAPH as In-Memory<br/>Knowledge Graph
+
+    Note over User,GRAPH: Path A: Traditional Full-Text Search
+
+    User->>React: Type "Java concurrency" in search bar
+    React->>React: Debounce 300ms
+    React->>GW: GET /api/v1/search?q=java+concurrency&page=0&size=20
+
+    GW->>SS: Forward search request
+    SS->>REDIS: GET cache:search:java_concurrency:p0
+    REDIS-->>SS: Cache MISS
+
+    SS->>ES: POST /articles/_search<br/>{<br/>  "query": {<br/>    "bool": {<br/>      "should": [<br/>        {"match": {"title": {"query": "java concurrency", "boost": 3}}},<br/>        {"match": {"content": "java concurrency"}},<br/>        {"match": {"tags": {"query": "java concurrency", "boost": 2}}}<br/>      ]<br/>    }<br/>  },<br/>  "highlight": {"fields": {"content": {}}}<br/>}
+    ES-->>SS: Ranked results with highlights<br/>[{id, title, score, highlight}]
+
+    SS->>REDIS: SET cache:search:... TTL=300s
+    SS-->>GW: SearchResponse with results
+    GW-->>React: Results + highlights
+    React-->>User: Display search results<br/>with highlighted matching text
+
+    Note over User,GRAPH: Path B: AI-Powered Semantic Search (RAG)
+
+    User->>React: Toggle "AI Search" mode
+    User->>React: Ask: "How does virtual thread differ from platform thread?"
+    React->>GW: POST /api/v1/search/semantic<br/>{query: "How does virtual thread..."}
+
+    GW->>AIS: Forward to AI Service
+    AIS->>AIS: Generate query embedding<br/>vector = embed("How does virtual thread...")
+    AIS->>ES: Vector similarity search (pgvector/ES kNN)<br/>Find top 5 most similar articles
+    ES-->>AIS: Top 5 article chunks<br/>(context for LLM)
+
+    AIS->>AIS: RAG Pipeline:<br/>System: "Answer using ONLY the provided context"<br/>Context: [5 article chunks]<br/>Question: "How does virtual thread..."
+    AIS->>AIS: Call Claude/OpenAI API<br/>with retrieved context
+    AIS-->>GW: {answer: "Virtual threads are...",<br/>sources: [{articleId, title, relevance}]}
+    GW-->>React: AI-generated answer + sources
+    React-->>User: Display answer with<br/>clickable source articles
+
+    Note over User,GRAPH: Path C: Related Articles (Graph DSA - BFS)
+
+    User->>React: Click article "Java 21 Virtual Threads"
+    React->>GW: GET /api/v1/articles/{id}/related?depth=2
+
+    GW->>SS: Get related articles
+    SS->>GRAPH: BFS from articleNode(id)<br/>depth=2, maxResults=10
+
+    Note right of GRAPH: Knowledge Graph (Adjacency List):<br/>Nodes = Articles<br/>Edges = Shared tags, Same category,<br/>Same author, Co-viewed<br/>Weight = Relevance score
+
+    GRAPH->>GRAPH: BFS Level 0: Article "Java 21 Virtual Threads"<br/>  → tags: [java, concurrency, jdk21]
+    GRAPH->>GRAPH: BFS Level 1: Articles sharing tags<br/>  → "CompletableFuture Guide" (weight: 0.8)<br/>  → "Thread Pool Tuning" (weight: 0.7)<br/>  → "Java Memory Model" (weight: 0.6)
+    GRAPH->>GRAPH: BFS Level 2: Articles related to Level 1<br/>  → "Reactive Programming" (weight: 0.4)<br/>  → "Kotlin Coroutines vs Threads" (weight: 0.5)
+    GRAPH->>GRAPH: Sort by weight (MergeSort - stable)<br/>Return top 10
+
+    GRAPH-->>SS: Related articles ranked by relevance
+    SS-->>GW: RelatedArticlesResponse
+    GW-->>React: Related articles list
+    React-->>User: "Related Articles" sidebar<br/>with relevance scores
+
+    Note over User,GRAPH: Path D: Autocomplete (Trie DSA)
+
+    User->>React: Type "Jav" in search box
+    React->>GW: GET /api/v1/search/autocomplete?prefix=jav
+
+    GW->>SS: Autocomplete request
+    SS->>SS: Trie.search("jav")<br/>O(k) where k = prefix length
+    SS->>SS: Results:<br/>→ "Java" (freq: 245)<br/>→ "JavaScript" (freq: 189)<br/>→ "Java 21" (freq: 156)<br/>→ "Java Streams" (freq: 134)
+    SS-->>GW: Suggestions sorted by frequency
+    GW-->>React: Autocomplete suggestions
+    React-->>User: Dropdown suggestions

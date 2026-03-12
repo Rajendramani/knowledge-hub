@@ -1,0 +1,87 @@
+---
+title: Knowledge-Hub — CI/CD Pipeline (GitHub Actions → AWS EKS)
+---
+graph LR
+    subgraph TRIGGER["🔔 Trigger"]
+        DEV["Developer<br/>git push"]
+        PR["Pull Request<br/>to develop/main"]
+    end
+
+    subgraph BUILD["🔨 Build Stage"]
+        CHECKOUT["Checkout Code"]
+        CACHE["Restore Maven<br/>+ npm Cache"]
+        COMPILE["mvn compile<br/>(Java 21)"]
+    end
+
+    subgraph TEST["🧪 Test Stage"]
+        UNIT["Unit Tests<br/>(Domain layer<br/>pure Java)"]
+        INTEG["Integration Tests<br/>(Testcontainers<br/>real PostgreSQL)"]
+        COVER["Code Coverage<br/>JaCoCo Report<br/>≥ 80% threshold"]
+    end
+
+    subgraph QUALITY["📊 Quality Stage"]
+        SONAR["SonarQube Scan<br/>• Bugs<br/>• Code Smells<br/>• Vulnerabilities<br/>• Duplication"]
+        GATE["Quality Gate<br/>Pass / Fail"]
+    end
+
+    subgraph DOCKER["🐳 Docker Stage"]
+        DBUILD["Docker Build<br/>(Multi-stage)<br/>Stage 1: Maven build<br/>Stage 2: JRE Alpine"]
+        DTAG["Tag Image<br/>:develop-{sha}<br/>:main-{sha}<br/>:latest"]
+        DPUSH["Push to ECR<br/>(AWS Container Registry)"]
+    end
+
+    subgraph DEPLOY_DEV["🚀 Deploy: Dev"]
+        HELM_DEV["Helm Upgrade<br/>--set image.tag={sha}<br/>Namespace: dev"]
+        SMOKE_DEV["Smoke Tests<br/>Health check endpoints"]
+    end
+
+    subgraph DEPLOY_STAGING["🚀 Deploy: Staging"]
+        APPROVE["Manual Approval<br/>(Team Lead review)"]
+        HELM_STG["Helm Upgrade<br/>Namespace: staging"]
+        E2E["E2E Tests<br/>(Playwright/Cypress)"]
+    end
+
+    subgraph DEPLOY_PROD["🚀 Deploy: Production"]
+        APPROVE_PROD["Manual Approval<br/>(2 approvers required)"]
+        CANARY["Canary Deploy<br/>10% → 50% → 100%"]
+        MONITOR["Monitor for 15 min<br/>Error rate < 0.1%<br/>P95 latency < 500ms"]
+        ROLLBACK["Auto-Rollback<br/>if metrics breach"]
+    end
+
+    DEV --> CHECKOUT
+    PR --> CHECKOUT
+    CHECKOUT --> CACHE
+    CACHE --> COMPILE
+    COMPILE --> UNIT
+    UNIT --> INTEG
+    INTEG --> COVER
+    COVER --> SONAR
+    SONAR --> GATE
+
+    GATE -->|Pass| DBUILD
+    GATE -->|Fail| DEV
+
+    DBUILD --> DTAG
+    DTAG --> DPUSH
+
+    DPUSH -->|develop branch| HELM_DEV
+    HELM_DEV --> SMOKE_DEV
+
+    SMOKE_DEV -->|Pass| APPROVE
+    APPROVE --> HELM_STG
+    HELM_STG --> E2E
+
+    E2E -->|Pass + main branch| APPROVE_PROD
+    APPROVE_PROD --> CANARY
+    CANARY --> MONITOR
+    MONITOR -->|Breach| ROLLBACK
+    MONITOR -->|OK| CANARY
+
+    style TRIGGER fill:#E3F2FD,stroke:#1565C0
+    style BUILD fill:#FFF8E1,stroke:#F9A825
+    style TEST fill:#E8F5E9,stroke:#2E7D32
+    style QUALITY fill:#F3E5F5,stroke:#7B1FA2
+    style DOCKER fill:#E0F2F1,stroke:#00695C
+    style DEPLOY_DEV fill:#C8E6C9,stroke:#2E7D32
+    style DEPLOY_STAGING fill:#FFF3E0,stroke:#E65100
+    style DEPLOY_PROD fill:#FCE4EC,stroke:#C62828

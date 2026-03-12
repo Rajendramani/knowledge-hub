@@ -1,0 +1,62 @@
+---
+title: Sequence Diagram — OAuth2 Authentication Flow (Keycloak PKCE)
+---
+sequenceDiagram
+    actor User as 👤 User
+    participant React as React SPA
+    participant KC as Keycloak<br/>(Auth Server)
+    participant GW as API Gateway
+    participant US as User Service
+    participant REDIS as Redis<br/>(Session Store)
+
+    Note over User,REDIS: Flow 1: Login (Authorization Code + PKCE)
+
+    User->>React: Click "Login"
+    React->>React: Generate code_verifier<br/>+ code_challenge (SHA256)
+    React->>KC: GET /auth/realms/knowledge-hub/protocol/openid-connect/auth<br/>?response_type=code<br/>&client_id=knowledge-hub-ui<br/>&redirect_uri=http://localhost:3000/callback<br/>&code_challenge={hash}<br/>&code_challenge_method=S256<br/>&scope=openid profile email
+
+    KC-->>User: Show Keycloak login page
+    User->>KC: Enter email + password
+    KC->>KC: Validate credentials
+    KC-->>React: 302 Redirect to /callback?code={auth_code}
+
+    React->>KC: POST /token<br/>{grant_type: authorization_code,<br/>code: {auth_code},<br/>code_verifier: {original_verifier},<br/>client_id: knowledge-hub-ui}
+    KC->>KC: Verify code_verifier matches code_challenge
+    KC-->>React: {access_token (JWT), refresh_token, id_token,<br/>expires_in: 300}
+
+    React->>React: Store tokens in memory<br/>(NOT localStorage - XSS risk!)
+    React->>React: Decode JWT → extract user info<br/>{sub, email, name, roles}
+
+    Note over User,REDIS: Flow 2: Authenticated API Request
+
+    User->>React: View article list
+    React->>GW: GET /api/v1/articles<br/>Authorization: Bearer {access_token}
+
+    GW->>GW: Extract JWT from header
+    GW->>KC: GET /certs (JWKS endpoint)<br/>Get public key to verify signature
+    Note right of GW: Cached! Only fetches<br/>JWKS once, then caches
+    GW->>GW: Verify JWT:<br/>1. Signature valid?<br/>2. Not expired?<br/>3. Issuer = Keycloak?<br/>4. Audience = correct?
+    GW->>GW: Extract claims:<br/>role = EDITOR
+    GW->>US: Forward request<br/>+ X-User-Id header<br/>+ X-User-Role header
+
+    US->>US: @PreAuthorize("hasRole('EDITOR')")
+    US-->>GW: 200 OK + articles
+    GW-->>React: 200 OK + articles
+    React-->>User: Display article list
+
+    Note over User,REDIS: Flow 3: Token Refresh (Silent)
+
+    React->>React: Token expires in 60s<br/>Trigger silent refresh
+    React->>KC: POST /token<br/>{grant_type: refresh_token,<br/>refresh_token: {refresh_token},<br/>client_id: knowledge-hub-ui}
+    KC->>KC: Validate refresh token
+    KC-->>React: New {access_token, refresh_token}
+    React->>React: Replace tokens in memory
+
+    Note over User,REDIS: Flow 4: Service-to-Service Auth (Client Credentials)
+
+    Note right of US: Article Service needs<br/>user details from User Service
+    GW->>GW: Article Service needs user info
+    GW->>KC: POST /token<br/>{grant_type: client_credentials,<br/>client_id: article-service,<br/>client_secret: {secret}}
+    KC-->>GW: {access_token (service token)}
+    GW->>US: GET /api/internal/v1/users/{id}<br/>Authorization: Bearer {service_token}
+    US-->>GW: User details

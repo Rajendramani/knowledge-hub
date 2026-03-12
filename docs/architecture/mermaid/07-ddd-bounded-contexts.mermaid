@@ -1,0 +1,57 @@
+---
+title: Knowledge-Hub — DDD Bounded Contexts & Domain Model
+---
+graph TB
+    subgraph BC_USER["🔐 Bounded Context: Identity & Access"]
+        U_AGG["<b>User Aggregate</b><br/>━━━━━━━━━━━━<br/>◆ User (Root)<br/>◇ Email (VO)<br/>◇ FullName (VO)<br/>◇ UserRole (Enum)<br/>◇ UserStatus (Enum)<br/>━━━━━━━━━━━━<br/>+ create()<br/>+ updateProfile()<br/>+ changeRole()<br/>+ deactivate()"]
+        U_EVT["Domain Events:<br/>• UserCreatedEvent<br/>• UserUpdatedEvent<br/>• UserDeactivatedEvent"]
+        U_REPO["UserRepository<br/>(Interface - Port)"]
+        U_AGG --> U_EVT
+        U_AGG --> U_REPO
+    end
+
+    subgraph BC_ARTICLE["📝 Bounded Context: Knowledge Management"]
+        A_AGG["<b>Article Aggregate</b><br/>━━━━━━━━━━━━<br/>◆ Article (Root)<br/>◇ Content (VO)<br/>◇ Tag[] (VO)<br/>◇ ArticleVersion (Entity)<br/>◇ ArticleStatus (Enum)<br/>━━━━━━━━━━━━<br/>+ create()<br/>+ publish()<br/>+ addVersion()<br/>+ archive()"]
+        A_EVT["Domain Events:<br/>• ArticleCreatedEvent<br/>• ArticlePublishedEvent<br/>• ArticleArchivedEvent"]
+        A_REPO["ArticleRepository<br/>(Interface - Port)"]
+        A_AGG --> A_EVT
+        A_AGG --> A_REPO
+
+        C_AGG["<b>Category Aggregate</b><br/>━━━━━━━━━━━━<br/>◆ Category (Root)<br/>◇ CategoryName (VO)<br/>◇ CategoryPath (VO)<br/>━━━━━━━━━━━━<br/>🌳 N-ary Tree Structure<br/>+ addChild()<br/>+ moveTo()<br/>+ getBreadcrumb()"]
+        C_AGG --> A_AGG
+    end
+
+    subgraph BC_COLLAB["💬 Bounded Context: Collaboration"]
+        CO_AGG["<b>Discussion Aggregate</b><br/>━━━━━━━━━━━━<br/>◆ Discussion (Root)<br/>◇ Comment (Entity)<br/>◇ CommentContent (VO)<br/>◇ Reaction (VO)<br/>━━━━━━━━━━━━<br/>+ addComment()<br/>+ addReaction()<br/>+ resolveDiscussion()"]
+        R_AGG["<b>Review Aggregate</b><br/>━━━━━━━━━━━━<br/>◆ Review (Root)<br/>◇ ReviewScore (VO)<br/>◇ ReviewStatus (Enum)<br/>━━━━━━━━━━━━<br/>+ submit()<br/>+ approve()<br/>+ reject()"]
+        CO_EVT["Domain Events:<br/>• CommentAddedEvent<br/>• ReviewSubmittedEvent"]
+        CO_AGG --> CO_EVT
+        R_AGG --> CO_EVT
+    end
+
+    subgraph BC_ANALYTICS["📊 Bounded Context: Analytics"]
+        AN_AGG["<b>ArticleStats Aggregate</b><br/>━━━━━━━━━━━━<br/>◆ ArticleStats (Root)<br/>◇ ViewCount (VO)<br/>◇ TrendScore (VO)<br/>━━━━━━━━━━━━<br/>📊 Sorting Algorithms:<br/>• MergeSort (trending)<br/>• QuickSort (leaderboard)<br/>• PriorityQueue (top-K)"]
+    end
+
+    subgraph BC_AI["🤖 Bounded Context: AI & Intelligence"]
+        AI_AGG["<b>AITask Aggregate</b><br/>━━━━━━━━━━━━<br/>◆ AITask (Root)<br/>◇ Embedding (VO)<br/>◇ Summary (VO)<br/>━━━━━━━━━━━━<br/>🧠 RAG Pipeline<br/>+ summarize()<br/>+ autoTag()<br/>+ semanticSearch()"]
+    end
+
+    subgraph BC_NOTIFY["🔔 Bounded Context: Notification"]
+        N_AGG["<b>Notification Aggregate</b><br/>━━━━━━━━━━━━<br/>◆ Notification (Root)<br/>◇ Channel (Enum)<br/>◇ NotificationContent (VO)<br/>━━━━━━━━━━━━<br/>🧵 Multi-threading:<br/>• ExecutorService<br/>• Virtual Threads<br/>• CompletableFuture"]
+    end
+
+    BC_USER =="UserCreatedEvent<br/>(via Kafka)"==> BC_NOTIFY
+    BC_ARTICLE =="ArticleCreatedEvent<br/>(via Kafka)"==> BC_AI
+    BC_ARTICLE =="ArticleCreatedEvent<br/>(via Kafka)"==> BC_ANALYTICS
+    BC_ARTICLE =="ArticleCreatedEvent<br/>(via Kafka)"==> BC_NOTIFY
+    BC_COLLAB =="CommentAddedEvent<br/>(via Kafka)"==> BC_NOTIFY
+    BC_COLLAB =="ReviewSubmittedEvent<br/>(via Kafka)"==> BC_ANALYTICS
+    BC_AI =="ArticleSummarizedEvent<br/>(via Kafka)"==> BC_ARTICLE
+
+    style BC_USER fill:#E3F2FD,stroke:#1565C0,stroke-width:2px
+    style BC_ARTICLE fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px
+    style BC_COLLAB fill:#FFF3E0,stroke:#E65100,stroke-width:2px
+    style BC_ANALYTICS fill:#F3E5F5,stroke:#7B1FA2,stroke-width:2px
+    style BC_AI fill:#FCE4EC,stroke:#C62828,stroke-width:2px
+    style BC_NOTIFY fill:#FFF8E1,stroke:#F9A825,stroke-width:2px

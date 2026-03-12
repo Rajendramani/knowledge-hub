@@ -1,0 +1,45 @@
+---
+title: Knowledge-Hub — Microservice Communication Patterns
+---
+graph LR
+    subgraph SYNC["🔄 Synchronous Communication (REST/GraphQL)"]
+        direction TB
+        GW2["API Gateway"] -->|REST| US2["User Service"]
+        GW2 -->|REST| AS2["Article Service"]
+        GW2 -->|GraphQL| CS2["Category Service"]
+        GW2 -->|GraphQL| SS2["Search Service"]
+        AS2 -->|REST - Get Author| US2
+        CS2 -->|REST - Get Articles| AS2
+        SS2 -->|REST - Get Article Details| AS2
+    end
+
+    subgraph ASYNC["📨 Asynchronous Communication (Kafka Events)"]
+        direction TB
+        AS3["Article Service"] -->|ArticleCreated<br/>ArticleUpdated<br/>ArticleDeleted| K1["article-events<br/>Topic"]
+        US3["User Service"] -->|UserCreated<br/>UserUpdated<br/>UserDeactivated| K2["user-events<br/>Topic"]
+        COLLAB3["Collaboration<br/>Service"] -->|CommentAdded<br/>ReviewSubmitted| K3["collaboration-events<br/>Topic"]
+
+        K1 -->|Index Article| SS3["Search Service"]
+        K1 -->|Update Stats| ANS3["Analytics Service"]
+        K1 -->|Auto-Summarize<br/>Auto-Tag| AIS3["AI/LLM Service"]
+        K1 -->|Notify Author| NS3["Notification Service"]
+
+        K2 -->|Welcome Email| NS3
+        K2 -->|Update Search Index| SS3
+
+        K3 -->|Notify Article Author| NS3
+        K3 -->|Update Activity Stats| ANS3
+    end
+
+    subgraph CACHE["⚡ Caching Pattern (Redis)"]
+        direction TB
+        SVC["Any Service"] -->|1. Check Cache| RED["Redis Cache"]
+        RED -->|2a. Cache HIT| SVC
+        SVC -->|2b. Cache MISS → Query DB| DB["PostgreSQL"]
+        DB -->|3. Return Data| SVC
+        SVC -->|4. Store in Cache| RED
+    end
+
+    style SYNC fill:#E3F2FD,stroke:#1565C0
+    style ASYNC fill:#FFF8E1,stroke:#F9A825
+    style CACHE fill:#FCE4EC,stroke:#C62828

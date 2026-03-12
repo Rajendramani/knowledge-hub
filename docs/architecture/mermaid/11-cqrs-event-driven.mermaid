@@ -1,0 +1,59 @@
+---
+title: Knowledge-Hub — CQRS + Event-Driven Architecture Pattern
+---
+graph TB
+    subgraph CLIENT["Client (React SPA)"]
+        WRITE_REQ["✏️ Write Request<br/>(Create/Update/Delete)"]
+        READ_REQ["📖 Read Request<br/>(Search/List/Get)"]
+    end
+
+    subgraph COMMAND_SIDE["✏️ COMMAND Side (Write Model)"]
+        CMD_GW["API Gateway<br/>(REST Endpoint)"]
+        CMD_SVC["Application Service<br/>(Command Handler)"]
+        CMD_DOM["Domain Model<br/>(Aggregate Root)<br/>Business Rules HERE"]
+        CMD_DB["PostgreSQL<br/>(Write Database)<br/>Normalized Schema"]
+        CMD_EVT["Domain Events<br/>Published to Kafka"]
+    end
+
+    subgraph EVENT_BUS["📨 Kafka Event Bus"]
+        TOPIC1["article-events"]
+        TOPIC2["user-events"]
+        TOPIC3["collaboration-events"]
+        DLT["Dead Letter Topic<br/>(Failed events)"]
+    end
+
+    subgraph QUERY_SIDE["📖 QUERY Side (Read Model)"]
+        Q_CONSUMER["Event Consumers<br/>(Update Read Models)"]
+        Q_ES["Elasticsearch<br/>(Search Read Model)<br/>Denormalized for fast reads"]
+        Q_REDIS["Redis Cache<br/>(Hot Data Read Model)<br/>Pre-computed aggregates"]
+        Q_MONGO["MongoDB<br/>(Activity Feed Model)<br/>Optimized for timeline reads"]
+        Q_SVC["Query Service<br/>(Read Handler)"]
+    end
+
+    WRITE_REQ --> CMD_GW
+    CMD_GW --> CMD_SVC
+    CMD_SVC --> CMD_DOM
+    CMD_DOM --> CMD_DB
+    CMD_DOM --> CMD_EVT
+
+    CMD_EVT --> TOPIC1
+    CMD_EVT --> TOPIC2
+    CMD_EVT --> TOPIC3
+    TOPIC1 --> Q_CONSUMER
+    TOPIC2 --> Q_CONSUMER
+    TOPIC3 --> Q_CONSUMER
+    TOPIC1 -.->|On failure| DLT
+
+    Q_CONSUMER --> Q_ES
+    Q_CONSUMER --> Q_REDIS
+    Q_CONSUMER --> Q_MONGO
+
+    READ_REQ --> Q_SVC
+    Q_SVC --> Q_ES
+    Q_SVC --> Q_REDIS
+    Q_SVC --> Q_MONGO
+
+    style CLIENT fill:#E3F2FD,stroke:#1565C0
+    style COMMAND_SIDE fill:#FFF8E1,stroke:#F9A825
+    style EVENT_BUS fill:#F3E5F5,stroke:#7B1FA2
+    style QUERY_SIDE fill:#E8F5E9,stroke:#2E7D32

@@ -1,0 +1,98 @@
+---
+title: Knowledge-Hub — AWS Deployment Architecture
+---
+graph TB
+    subgraph INTERNET["🌐 Internet"]
+        USER["Users / Browsers"]
+    end
+
+    subgraph AWS["☁️ AWS Cloud (ap-south-1)"]
+        subgraph VPC["VPC: 10.0.0.0/16"]
+            subgraph PUBLIC["Public Subnets (10.0.1.0/24, 10.0.2.0/24)"]
+                ALB["Application Load Balancer<br/>HTTPS :443<br/>SSL Certificate (ACM)"]
+                NAT["NAT Gateway<br/>(for outbound internet)"]
+            end
+
+            subgraph PRIVATE["Private Subnets (10.0.3.0/24, 10.0.4.0/24)"]
+                subgraph EKS["EKS Cluster (Kubernetes)"]
+                    subgraph NS_GW["Namespace: gateway"]
+                        GW_POD["API Gateway Pod<br/>replicas: 2<br/>CPU: 500m, Mem: 512Mi"]
+                    end
+
+                    subgraph NS_SERVICES["Namespace: services"]
+                        US_POD["User Service<br/>replicas: 2"]
+                        AS_POD["Article Service<br/>replicas: 3"]
+                        CS_POD["Category Service<br/>replicas: 1"]
+                        CO_POD["Collaboration Svc<br/>replicas: 2"]
+                        NS_POD["Notification Svc<br/>replicas: 2"]
+                        AN_POD["Analytics Svc<br/>replicas: 2"]
+                        MS_POD["Media Svc<br/>replicas: 1"]
+                        AI_POD["AI/LLM Svc<br/>replicas: 2"]
+                        SS_POD["Search Svc<br/>replicas: 2"]
+                    end
+
+                    subgraph NS_INFRA["Namespace: infrastructure"]
+                        KC_POD["Keycloak<br/>replicas: 2"]
+                        KAFKA_POD["Kafka Broker<br/>replicas: 3"]
+                        ZK_POD["Zookeeper<br/>replicas: 3"]
+                    end
+
+                    subgraph NS_MONITOR["Namespace: monitoring"]
+                        ZIPKIN_POD["Zipkin"]
+                        PROM_POD["Prometheus"]
+                        GRAF_POD["Grafana"]
+                        FB_POD["Filebeat<br/>(DaemonSet)"]
+                    end
+
+                    HPA["HPA: Auto-scale<br/>based on CPU > 70%"]
+                end
+
+                subgraph DATA_TIER["Data Tier (Managed Services)"]
+                    RDS["Amazon RDS<br/>PostgreSQL 16<br/>Multi-AZ<br/>db.r6g.large"]
+                    ECACHE["Amazon ElastiCache<br/>Redis 7<br/>Cluster Mode"]
+                    ES_AWS["Amazon OpenSearch<br/>(Elasticsearch)<br/>2 nodes"]
+                    DOCDB["Amazon DocumentDB<br/>(MongoDB compatible)"]
+                end
+            end
+        end
+
+        S3["Amazon S3<br/>Media Storage<br/>+ Static Assets"]
+        ECR["Amazon ECR<br/>Docker Image Registry"]
+        CW["Amazon CloudWatch<br/>Logs + Metrics + Alarms"]
+        R53["Route 53<br/>DNS: knowledgehub.com"]
+        IAM["IAM Roles<br/>Least Privilege<br/>Per-service roles"]
+    end
+
+    USER -->|HTTPS| R53
+    R53 --> ALB
+    ALB --> GW_POD
+    GW_POD --> US_POD
+    GW_POD --> AS_POD
+    GW_POD --> CS_POD
+    GW_POD --> CO_POD
+    GW_POD --> SS_POD
+    GW_POD --> AI_POD
+
+    US_POD --> RDS
+    AS_POD --> RDS
+    CO_POD --> DOCDB
+    US_POD --> ECACHE
+    SS_POD --> ES_AWS
+    MS_POD --> S3
+    AI_POD --> S3
+
+    US_POD --> KAFKA_POD
+    AS_POD --> KAFKA_POD
+    KAFKA_POD --> NS_POD
+    KAFKA_POD --> AN_POD
+
+    FB_POD -.-> CW
+    PROM_POD -.-> CW
+
+    style INTERNET fill:#E0E0E0,stroke:#616161
+    style AWS fill:#FFF3E0,stroke:#E65100
+    style VPC fill:#E3F2FD,stroke:#1565C0
+    style PUBLIC fill:#C8E6C9,stroke:#2E7D32
+    style PRIVATE fill:#BBDEFB,stroke:#1565C0
+    style EKS fill:#E8F5E9,stroke:#2E7D32
+    style DATA_TIER fill:#FCE4EC,stroke:#C62828

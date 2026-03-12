@@ -1,0 +1,78 @@
+---
+title: Sequence Diagram — Notification Service (Java Multi-threading Deep Dive)
+---
+sequenceDiagram
+    participant KAFKA as Kafka Consumer<br/>(Main Thread)
+    participant POOL as ThreadPoolExecutor<br/>(core=5, max=20)
+    participant VT as Virtual Threads<br/>(Java 21)
+    participant CF as CompletableFuture<br/>Chain
+    participant DB as PostgreSQL
+    participant EMAIL as Email Server<br/>(SMTP)
+    participant PUSH as Push Notification<br/>Service
+    participant DLT as Dead Letter Topic
+
+    Note over KAFKA,DLT: Scenario: Article published → Notify 500 followers
+
+    KAFKA->>KAFKA: Poll: ArticleCreatedEvent<br/>{articleId, authorId, title}
+    KAFKA->>DB: SELECT followers WHERE<br/>following_user_id = authorId
+    DB-->>KAFKA: 500 follower records
+
+    Note over KAFKA,POOL: Strategy 1: ExecutorService with ThreadPool
+
+    KAFKA->>POOL: submitBatch(500 notifications)
+    
+    Note right of POOL: ThreadPoolExecutor config:<br/>corePoolSize: 5<br/>maxPoolSize: 20<br/>queueCapacity: 100<br/>keepAliveTime: 60s<br/>rejectedHandler: CallerRunsPolicy
+
+    loop For each batch of 50
+        POOL->>POOL: Thread-1: Process notifications[0-49]
+        POOL->>POOL: Thread-2: Process notifications[50-99]
+        POOL->>POOL: Thread-3: Process notifications[100-149]
+        POOL->>POOL: Thread-4: Process notifications[150-199]
+        POOL->>POOL: Thread-5: Process notifications[200-249]
+    end
+
+    Note over VT,CF: Strategy 2: Virtual Threads (Java 21) for I/O-bound work
+
+    KAFKA->>VT: ExecutorService.newVirtualThreadPerTaskExecutor()
+    
+    Note right of VT: Virtual Threads:<br/>• Lightweight (few KB vs 1MB platform thread)<br/>• Managed by JVM, not OS<br/>• Perfect for I/O blocking<br/>• Can create 1M+ simultaneously<br/>• Carrier thread released during I/O wait
+
+    loop For each of 500 followers
+        VT->>VT: VirtualThread-1 → send email[0]
+        VT->>VT: VirtualThread-2 → send email[1]
+        VT->>VT: VirtualThread-... → ...
+        VT->>VT: VirtualThread-500 → send email[499]
+        Note right of VT: 500 virtual threads run concurrently!<br/>Each blocks on I/O without<br/>consuming an OS thread
+    end
+
+    Note over CF,EMAIL: Strategy 3: CompletableFuture Async Chain
+
+    CF->>CF: Step 1: supplyAsync(() → fetchUserPrefs)
+    CF->>DB: Query user notification preferences
+    DB-->>CF: {email: true, push: true, inApp: true}
+
+    CF->>CF: Step 2: thenApply(prefs → composeMessage)
+    CF->>CF: Build personalized notification
+
+    CF->>CF: Step 3: thenCompose(msg → sendAll)
+
+    par Send in parallel
+        CF->>EMAIL: thenApplyAsync(() → sendEmail)
+        EMAIL-->>CF: Email sent ✅
+    and
+        CF->>PUSH: thenApplyAsync(() → sendPush)
+        PUSH-->>CF: Push sent ✅
+    and
+        CF->>DB: thenApplyAsync(() → saveInApp)
+        DB-->>CF: In-app saved ✅
+    end
+
+    CF->>CF: Step 4: allOf(email, push, inApp).join()
+    CF->>CF: Step 5: exceptionally(error → handleFailure)
+
+    Note over CF,DLT: Error Handling
+
+    CF->>CF: If any send fails after 3 retries
+    CF->>DLT: Publish to dead-letter-topic<br/>for manual investigation
+
+    Note over KAFKA,DLT: Summary: Threading Approaches Used<br/>1. ThreadPoolExecutor → CPU-bound batch processing<br/>2. Virtual Threads → I/O-bound concurrent sends<br/>3. CompletableFuture → Async pipeline with error handling

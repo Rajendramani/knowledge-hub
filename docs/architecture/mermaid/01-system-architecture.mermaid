@@ -1,0 +1,98 @@
+---
+title: Knowledge-Hub — High-Level System Architecture
+---
+graph TB
+    subgraph CLIENT["🖥️ Client Layer"]
+        REACT["React SPA<br/>React 18 + TypeScript<br/>Zustand + React Query<br/>Tailwind CSS"]
+        MOBILE["Mobile Browser<br/>Responsive PWA"]
+    end
+
+    subgraph GATEWAY["🚪 API Gateway Layer"]
+        GW["API Gateway<br/>Spring Cloud Gateway<br/>REST + GraphQL<br/>Rate Limiting<br/>Circuit Breaker"]
+    end
+
+    subgraph AUTH["🔐 Identity & Access"]
+        KC["Keycloak<br/>OAuth2 / OIDC<br/>RBAC / SSO<br/>JWT Tokens"]
+    end
+
+    subgraph SERVICES["⚙️ Microservices Layer"]
+        US["User Service<br/>Port: 8081<br/>DDD + JPA"]
+        AS["Article Service<br/>Port: 8082<br/>DDD + JSONB"]
+        CS["Category Service<br/>Port: 8083<br/>Tree DSA + Trie"]
+        COLLAB["Collaboration Service<br/>Port: 8084<br/>MongoDB"]
+        NS["Notification Service<br/>Port: 8085<br/>Multi-threading"]
+        ANS["Analytics Service<br/>Port: 8086<br/>Sorting DSA"]
+        MS["Media Service<br/>Port: 8087<br/>S3 Upload"]
+        AIS["AI/LLM Service<br/>Port: 8088<br/>RAG Pipeline"]
+        SS["Search Service<br/>Port: 8089<br/>Graph DSA"]
+    end
+
+    subgraph DATA["💾 Data Layer"]
+        PG["PostgreSQL 16<br/>Users, Articles<br/>Categories, Analytics"]
+        MONGO["MongoDB 7<br/>Comments, Activity Logs<br/>User Preferences"]
+        REDIS["Redis 7<br/>Cache + Sessions<br/>Rate Limiter"]
+        ES["Elasticsearch 8<br/>Full-text Search<br/>Article Index"]
+    end
+
+    subgraph MESSAGING["📨 Event Bus"]
+        KAFKA["Apache Kafka<br/>Domain Events<br/>CQRS Commands<br/>Dead Letter Topics"]
+    end
+
+    subgraph OBSERVABILITY["📊 Observability Stack"]
+        ZIPKIN["Zipkin<br/>Distributed Tracing"]
+        PROM["Prometheus<br/>Metrics Collection"]
+        GRAFANA["Grafana<br/>Dashboards & Alerts"]
+        ELK["ELK Stack<br/>Filebeat → Logstash<br/>→ Elasticsearch → Kibana"]
+    end
+
+    subgraph CLOUD["☁️ AWS Cloud"]
+        EKS["EKS<br/>Kubernetes Cluster"]
+        RDS["RDS<br/>Managed PostgreSQL"]
+        EC["ElastiCache<br/>Managed Redis"]
+        S3["S3<br/>Media Storage"]
+        CW["CloudWatch<br/>Monitoring"]
+    end
+
+    REACT -->|HTTPS| GW
+    MOBILE -->|HTTPS| GW
+    GW -->|JWT Validation| KC
+    GW -->|REST/GraphQL| US
+    GW -->|REST/GraphQL| AS
+    GW -->|REST/GraphQL| CS
+    GW -->|REST/GraphQL| COLLAB
+    GW -->|REST/GraphQL| ANS
+    GW -->|REST/GraphQL| MS
+    GW -->|REST/GraphQL| AIS
+    GW -->|REST/GraphQL| SS
+
+    US --> PG
+    AS --> PG
+    CS --> PG
+    ANS --> PG
+    COLLAB --> MONGO
+    US --> REDIS
+    AS --> REDIS
+    SS --> ES
+    MS --> S3
+
+    US -->|Publish Events| KAFKA
+    AS -->|Publish Events| KAFKA
+    COLLAB -->|Publish Events| KAFKA
+    KAFKA -->|Consume Events| NS
+    KAFKA -->|Consume Events| ANS
+    KAFKA -->|Consume Events| SS
+    KAFKA -->|Consume Events| AIS
+
+    US -.->|Traces| ZIPKIN
+    AS -.->|Traces| ZIPKIN
+    US -.->|Metrics| PROM
+    PROM -.-> GRAFANA
+
+    style CLIENT fill:#E3F2FD,stroke:#1565C0
+    style GATEWAY fill:#F3E5F5,stroke:#7B1FA2
+    style AUTH fill:#FFF3E0,stroke:#E65100
+    style SERVICES fill:#E8F5E9,stroke:#2E7D32
+    style DATA fill:#FCE4EC,stroke:#C62828
+    style MESSAGING fill:#FFF8E1,stroke:#F9A825
+    style OBSERVABILITY fill:#F1F8E9,stroke:#558B2F
+    style CLOUD fill:#E0F2F1,stroke:#00695C
