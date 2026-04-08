@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
-  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
   https://maven.apache.org/xsd/maven-4.0.0.xsd">
 
   <modelVersion>4.0.0</modelVersion>
@@ -21,3 +20,161 @@
     <version>3.3.7</version>
     <relativePath/>
   </parent>
+
+  <!-- ═══ PROPERTIES: All versions in ONE place ═══ -->
+  <properties>
+    <java.version>21</java.version>
+    <maven.compiler.source>21</maven.compiler.source>
+    <maven.compiler.target>21</maven.compiler.target>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+
+    <!-- Spring Cloud -->
+    <spring-cloud.version>2024.0.0</spring-cloud.version>
+
+    <!-- Database -->
+    <postgresql.version>42.7.4</postgresql.version>
+    <flyway.version>10.21.0</flyway.version>
+
+    <!-- Messaging -->
+    <spring-kafka.version>3.3.1</spring-kafka.version>
+
+    <!-- Caching -->
+    <redis.version>3.3.7</redis.version>
+
+    <!-- Search -->
+    <elasticsearch.version>8.15.0</elasticsearch.version>
+
+    <!-- Security -->
+    <keycloak.version>26.0.0</keycloak.version>
+
+    <!-- Observability -->
+    <micrometer-tracing.version>1.4.1</micrometer-tracing.version>
+    <zipkin-reporter.version>3.4.2</zipkin-reporter.version>
+
+    <!-- Utilities -->
+    <mapstruct.version>1.6.3</mapstruct.version>
+    <lombok.version>1.18.36</lombok.version>
+    <springdoc.version>2.7.0</springdoc.version>
+
+    <!-- Testing -->
+    <testcontainers.version>1.20.4</testcontainers.version>
+  </properties>
+
+  <!-- ═══ MODULES: All child projects ═══ -->
+  <modules>
+    <!-- Shared Libraries (build first) -->
+    <module>shared/common-models</module>
+    <module>shared/common-security</module>
+    <module>shared/common-messaging</module>
+
+    <!-- Microservices -->
+    <module>services/user-service</module>
+    <module>services/article-service</module>
+    <module>services/category-service</module>
+    <module>services/collaboration-service</module>
+    <module>services/notification-service</module>
+    <module>services/analytics-service</module>
+    <module>services/media-service</module>
+    <module>services/ai-service</module>
+    <module>services/search-service</module>
+    <module>services/api-gateway</module>
+  </modules>
+
+  <!-- ═══ DEPENDENCY MANAGEMENT (BOM) ═══ -->
+  <dependencyManagement>
+    <dependencies>
+      <!-- Spring Cloud BOM -->
+      <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-dependencies</artifactId>
+        <version>${spring-cloud.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+
+      <!-- Testcontainers BOM -->
+      <dependency>
+        <groupId>org.testcontainers</groupId>
+        <artifactId>testcontainers-bom</artifactId>
+        <version>${testcontainers.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+
+      <!-- Internal shared modules -->
+      <dependency>
+        <groupId>com.knowledgehub</groupId>
+        <artifactId>common-models</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.knowledgehub</groupId>
+        <artifactId>common-security</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.knowledgehub</groupId>
+        <artifactId>common-messaging</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
+      <!-- MapStruct -->
+      <dependency>
+        <groupId>org.mapstruct</groupId>
+        <artifactId>mapstruct</artifactId>
+        <version>${mapstruct.version}</version>
+      </dependency>
+
+      <!-- SpringDoc OpenAPI -->
+      <dependency>
+        <groupId>org.springdoc</groupId>
+        <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+        <version>${springdoc.version}</version>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <!-- ═══ COMMON DEPENDENCIES (all modules get these) ═══ -->
+  <dependencies>
+    <dependency>
+      <groupId>org.projectlombok</groupId>
+      <artifactId>lombok</artifactId>
+      <optional>true</optional>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <!-- ═══ BUILD PLUGINS ═══ -->
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <source>21</source>
+          <target>21</target>
+          <compilerArgs>--enable-preview</compilerArgs>
+          <annotationProcessorPaths>
+            <path>
+              <groupId>org.projectlombok</groupId>
+              <artifactId>lombok</artifactId>
+              <version>${lombok.version}</version>
+            </path>
+            <path>
+              <groupId>org.mapstruct</groupId>
+              <artifactId>mapstruct-processor</artifactId>
+              <version>${mapstruct.version}</version>
+            </path>
+          </annotationProcessorPaths>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>
+
