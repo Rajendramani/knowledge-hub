@@ -1,0 +1,39 @@
+# ═══ Java ═══
+*.class
+*.jar
+*.war
+*.ear
+target/
+
+# ═══ Maven ═══
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# ═══ IDE ═══
+.idea/
+*.iml
+.vscode/
+*.swp
+.project
+.classpath
+.settings/
+
+# ═══ OS ═══
+.DS_Store
+Thumbs.db
+
+# ═══ Node (React) ═══
+node_modules/
+frontend/knowledge-hub-ui/build/
+
+# ═══ Environment ═══
+.env
+.env.local
+*.env
+
+# ═══ Docker ═══
+docker-compose.override.yml
+
+# ═══ Logs ═══
+*.log
+logs/
