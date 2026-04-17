@@ -1,86 +1,115 @@
+version: '3.8'
 
-High-level Architecture (Microservices)
+services:
+  # ═══ CORE INFRASTRUCTURE (Profile: core) ═══
+  postgres:
+    image: postgres:16-alpine
+    container_name: kh-postgres
+    environment:
+      POSTGRES_USER: knowledgehub
+      POSTGRES_PASSWORD: khub_secret_2026
+      POSTGRES_DB: knowledgehub
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    profiles: [ core ]
+    healthcheck:
+      test: [ 'CMD-SHELL', 'pg_isready -U knowledgehub' ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-Frontend
+  redis:
+    image: redis:7-alpine
+    container_name: kh-redis
+    ports:
+      - '6379:6379'
+    profiles: [ core ]
+    healthcheck:
+      test: [ 'CMD', 'redis-cli', 'ping' ]
+      interval: 10s
 
-React SPA (TypeScript optional)
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: kh-keycloak
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    command: start-dev
+    ports:
+      - '8180:8080'
+    profiles: [ core ]
 
-Backend Microservices (Spring Boot)
+  # ═══ MESSAGING (Profile: messaging) ═══
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.7.0
+    container_name: kh-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    profiles: [ messaging ]
 
-Identity Service (Keycloak integration / IAM gateway config)
+  kafka:
+    image: confluentinc/cp-kafka:7.7.0
+    container_name: kh-kafka
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    ports:
+      - '9092:9092'
+    profiles: [ messaging ]
 
-Note Service (Postgres)
+  # ═══ NOSQL (Profile: nosql) ═══
+  mongodb:
+    image: mongo:7.0
+    container_name: kh-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: knowledgehub
+      MONGO_INITDB_ROOT_PASSWORD: khub_mongo_2026
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongo_data:/data/db
+    profiles: [ nosql ]
 
-Search Service (Mongo + index strategy; or Postgres full-text initially, later Mongo)
+  # ═══ SEARCH (Profile: search) ═══
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
+    container_name: kh-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - 'ES_JAVA_OPTS=-Xms512m -Xmx512m'
+    ports:
+      - '9200:9200'
+    profiles: [ search ]
 
-Practice Service (DSA) (Postgres)
+  # ═══ OBSERVABILITY (Profile: observability) ═══
+  zipkin:
+    image: openzipkin/zipkin
+    container_name: kh-zipkin
+    ports:
+      - '9411:9411'
+    profiles: [ observability ]
 
-AI Service (LLM calls + prompt templates + conversation memory store)
+  prometheus:
+    image: prom/prometheus
+    container_name: kh-prometheus
+    ports:
+      - '9090:9090'
+    profiles: [ observability ]
 
-Notification Service (Email/Push later; initially in-app)
+  grafana:
+    image: grafana/grafana
+    container_name: kh-grafana
+    ports:
+      - '3001:3000'
+    profiles: [ observability ]
 
-Analytics Service (events consume செய்து stats உருவாக்கும்)
-
-Infra
-
-Redis cache
-
-MQ (Kafka/RabbitMQ)
-
-Observability: Zipkin + Grafana + ELK
-
-Docker + Kubernetes
-
-CI/CD pipeline
-
-AWS deploy (EKS + RDS + ElastiCache + MSK/RabbitMQ option)
-
-Tech Mapping (நீங்க சொன்ன எல்லாம் எங்கே வருது)
-
-Java 21: virtual threads, structured concurrency (phase 2/3), records, pattern matching
-
-Lambda/Streams: filtering, ranking, analytics pipelines
-
-Threads/Executor/Multi-threading: AI calls parallel, search indexing workers, batch scoring
-
-Spring Boot Microservices: above services
-
-DSA:
-
-Sorting → ranking results / leaderboard
-
-Graph → topic dependency map (“what to learn next”)
-
-Tree/Trie → autocomplete/tag suggestions (phase 2)
-
-React: dashboard, editor, practice UI
-
-IAM: Keycloak (Okta optional extension)
-
-REST + GraphQL:
-
-REST per service
-
-GraphQL at API Gateway/BFF for frontend
-
-DDD: bounded contexts (Notes, Practice, Search, Identity, AI)
-
-Event-driven: MQ events (NoteCreated, NoteUpdated, PracticeCompleted…)
-
-Zipkin: distributed tracing
-
-Grafana: metrics dashboards
-
-ELK: centralized logs
-
-Redis: caching + rate limit + session tokens
-
-Postgres: transactional store
-
-MongoDB: search documents / AI conversation store (or index store)
-
-MQ: RabbitMQ/Kafka
-
-Docker/K8s/CI-CD/AWS: later phases
-
-AI/LLM: prompt library + evaluation + cost controls
+volumes:
+  postgres_data:
+  mongo_data:
